@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-const connectToDB = async () => {
+const connectToDatabase = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI)
     console.log(`MongoDB connected: ${conn.connection.host}`)
@@ -15,11 +15,12 @@ const storeData = async (data) => {
     const db = mongoose.connection
     const collection = db.collection('major_org_events')
     await collection.deleteMany({})
-    await collection.insertMany(data)
-    console.log('Data stored successfully in the database')
+
+    const insertResult = await collection.insertMany(data)
+    console.log('Data stored successfully in the database', insertResult)
   } catch (error) {
     console.error(`Error storing data: ${error.message}`)
   }
 }
 
-export { connectToDB, storeData }
+export { connectToDatabase, storeData }
