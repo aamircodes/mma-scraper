@@ -106,7 +106,7 @@ const filterByMajorPromotions = (events) => {
 
 // TODO: create a function to map weight to weightclass
 
-// extract fight details for each event page, return the name, profileUrl, record and rank for each fight
+// extracts fight details - weight, if it's a main card fight, and fighter info
 const getFightCardDetails = async (page) => {
   return await page.evaluate(() => {
     // helper function to get data for each fighter
@@ -156,15 +156,13 @@ const getFightCardDetails = async (page) => {
     )
 
     return fightElements.map((fightEl) => {
-      // fight weight class
-      const isMain = fightEl.innerText.toLowerCase().includes('main')
-
+      const isMaincard = fightEl.innerText.toLowerCase().includes('main')
       const weight =
         fightEl.querySelector('span.bg-tap_darkgold')?.innerText.trim() || null
       const fighterA = extractFighterData(fightEl, 1)
       const fighterB = extractFighterData(fightEl, 3)
 
-      return { weight, main: isMain, fighterA, fighterB }
+      return { weight, maincard: isMaincard, fighterA, fighterB }
     })
   })
 }
