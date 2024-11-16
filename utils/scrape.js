@@ -116,7 +116,14 @@ const getFightCardDetails = async (page) => {
       )
 
       if (!fighterElement)
-        return { name: null, profileUrl: null, record: null, rank: null }
+        return {
+          name: null,
+          profileUrl: null,
+          record: null,
+          rank: null,
+          imageUrl: null,
+          countryFlagUrl: null,
+        }
 
       const name =
         fighterElement.querySelector('a.link-primary-red')?.innerText.trim() ||
@@ -132,7 +139,11 @@ const getFightCardDetails = async (page) => {
           .querySelector('div.bg-tap_darkred span.text-sm.md\\:text-xs11')
           ?.innerText.trim() || null
 
-      return { name, profileUrl, record, rank }
+      const imageUrl = fighterElement.querySelector('img')?.src || null
+      const countryFlagUrl =
+        fighterElement.querySelector('img.opacity-70')?.src || null
+
+      return { name, profileUrl, record, rank, imageUrl, countryFlagUrl }
     }
 
     const fightCardSection = document.querySelector('#sectionFightCard')
