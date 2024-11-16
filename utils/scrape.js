@@ -16,7 +16,14 @@ const scrape = async () => {
 
   try {
     // Navigate to main events page and extract initial event details
-    await page.goto(`${BASE_URL}/fightcenter?group=major&schedule=upcoming`)
+    const response = await page.goto(
+      `${BASE_URL}/fightcenter?group=major&schedule=upcoming`
+    )
+
+    if (!response || response.status() !== 200) {
+      throw new Error('Error scraping code from Tapology')
+    }
+
     const allEvents = await getEventDetails(page)
 
     // Filter events
@@ -26,7 +33,15 @@ const scrape = async () => {
     for (let event of events) {
       if (event.link) {
         try {
-          await page.goto(event.link)
+          const eventResponse = await page.goto(event.link)
+
+          if (!eventResponse || eventResponse.status() !== 200) {
+            // throw new Error('Error scraping code from Tapology')
+            console.warn(
+              `Skipping event ${event.link} due to error with navigation`
+            )
+            continue
+          }
 
           const fights = await getFightCardDetails(page)
           event.fights = fights
@@ -58,10 +73,7 @@ const getEventDetails = async (page) => {
     return Array.from(document.querySelectorAll('.promotion')).map((el) => {
       const title = el.querySelector('a')?.innerText.trim() || null
       const eventId = title ? formatEventId(title) : null
-      const datetime =
-        el
-          .querySelector('span.hidden.md\\:inline:nth-of-type(4)')
-          ?.innerText.trim() || null
+      const datetime = el.querySelectorAll('span')[3]?.innerText.trim() || null
       const link = el.querySelector('a')?.href || null
 
       return { eventId, title, datetime, link }
@@ -79,6 +91,20 @@ const filterByMajorPromotions = (events) => {
     )
     .slice(0, MAX_PROMOTIONS)
 }
+
+// const WEIGHT_CLASSES = {
+//   265: 'HW',
+//   205: 'LHW',
+//   185: 'MW',
+//   170: 'WW',
+//   155: 'LW',
+//   145: 'FW',
+//   135: 'BW',
+//   125: 'FLW',
+//   115: 'SW',
+// }
+
+// TODO: create a function to map weight to weightclass
 
 // extract fight details for each event page, return the name, profileUrl, record and rank for each fight
 const getFightCardDetails = async (page) => {
@@ -120,13 +146,14 @@ const getFightCardDetails = async (page) => {
 
     return fightElements.map((fightEl) => {
       // fight weight class
+      const isMain = fightEl.innerText.toLowerCase().includes('main')
+
       const weight =
         fightEl.querySelector('span.bg-tap_darkgold')?.innerText.trim() || null
-
       const fighterA = extractFighterData(fightEl, 1)
       const fighterB = extractFighterData(fightEl, 3)
 
-      return { weight, fighterA, fighterB }
+      return { weight, main: isMain, fighterA, fighterB }
     })
   })
 }

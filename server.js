@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'MMA Scraper API!' })
 })
 
-app.post('/scrape', async (req, res) => {
+app.post('/api/events/scrape', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
@@ -25,7 +25,10 @@ app.post('/scrape', async (req, res) => {
 
   try {
     const scrapeResult = await scrape()
-    await storeData(scrapeResult.events)
+    await storeData({
+      events: scrapeResult.events,
+      updatedAt: new Date(),
+    })
 
     res.status(200).json({
       message: 'Scrape completed and data stored successfully',
@@ -35,21 +38,32 @@ app.post('/scrape', async (req, res) => {
   }
 })
 
-app.get('/events', async (req, res) => {
+app.get('/api/events', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
-    return res.status(403).json({ message: 'Forbidden: Invalid API key' })
+    return res
+      .status(403)
+      .json({ error: true, message: 'Forbidden: Invalid API key' })
   }
 
   try {
     const db = mongoose.connection
     const collection = db.collection('major_org_events')
-    const events = await collection.find({}).toArray()
-    res.status(200).json({ data: events })
+    const data = await collection.findOne({})
+    res.status(200).json({
+      error: false,
+      message: 'Events retrieved successfully',
+      updatedAt: data.updatedAt,
+      data: data.events,
+    })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
+})
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' })
 })
 
 const PORT = process.env.PORT || 3000

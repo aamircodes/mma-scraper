@@ -15,9 +15,8 @@ const storeData = async (data) => {
     const db = mongoose.connection
     const collection = db.collection('major_org_events')
     await collection.deleteMany({})
-
-    const insertResult = await collection.insertMany(data)
-    console.log('Data stored successfully in the database', insertResult)
+    await collection.insertOne(data)
+    console.log('Data stored successfully in the database')
   } catch (error) {
     console.error(`Error storing data: ${error.message}`)
   }
