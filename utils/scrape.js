@@ -1,121 +1,101 @@
 import puppeteer from 'puppeteer'
-import dotenv from 'dotenv'
+import { BASE_URL, MAJOR_PROMOTIONS, MAX_PROMOTIONS } from './constants.js'
 
-dotenv.config()
-
-const BASE_URL = process.env.BASE_URL
-const MAJOR_PROMOTIONS = ['UFC', 'PFL', 'BELLATOR', 'RIZIN']
-const MAX_PROMOTIONS = 10
-
-// Main function to scrape event data
 const scrape = async () => {
-  console.log('Launching browser...')
   const browser = await puppeteer.launch({ headless: true })
   const page = await browser.newPage()
-  let events = []
 
   try {
-    // Navigate to main events page and extract initial event details
-    const response = await page.goto(
-      `${BASE_URL}/fightcenter?group=major&schedule=upcoming`
-    )
+    // Step 1: Fetch the initial list of events
+    const allEvents = await fetchInitialEventList(page)
 
-    if (!response || response.status() !== 200) {
-      throw new Error('Error scraping code from Tapology')
-    }
+    // Step 2: Filter the list to only include relevant events
+    const filteredEvents = filterMajorPromotions(allEvents)
 
-    const allEvents = await getEventDetails(page)
+    // Step 3: Enrich only the filtered events with fight card details
+    const enrichedEvents = await populateEvents(filteredEvents, page)
 
-    // Filter events
-    events = filterByMajorPromotions(allEvents)
-
-    // Loop through events, populate the fights array for each event
-    for (let event of events) {
-      if (event.link) {
-        try {
-          const eventResponse = await page.goto(event.link)
-
-          if (!eventResponse || eventResponse.status() !== 200) {
-            // throw new Error('Error scraping code from Tapology')
-            console.warn(
-              `Skipping event ${event.link} due to error with navigation`
-            )
-            continue
-          }
-
-          const fights = await getFightCardDetails(page)
-          event.fights = fights
-        } catch (error) {
-          console.error(`Error navigating to event: ${event.link} - ${error}`)
-        }
-      }
-    }
+    return enrichedEvents
   } catch (error) {
-    console.error(`Error occurred during scraping: ${error}`)
+    console.error(`Error occurred during scraping: ${error.message}`)
+    return []
   } finally {
-    console.log('Closing the browser.')
-    await browser.close()
+    await page.close()
   }
-
-  return { events }
 }
 
-// get list of events from main page and populate each event with id, title, datetime and link
-const getEventDetails = async (page) => {
-  const events = await page.evaluate(() => {
-    const formatEventId = (eventName) => {
-      return eventName
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-    }
+// Fetch the initial list of events from the main page
+const fetchInitialEventList = async (page) => {
+  try {
+    console.log(`Navigating to ${BASE_URL}...`)
+    await page.goto(`${BASE_URL}/fightcenter?group=major&schedule=upcoming`)
 
-    return Array.from(document.querySelectorAll('.promotion')).map((el) => {
-      const title = el.querySelector('a')?.innerText.trim() || null
-      const eventId = title ? formatEventId(title) : null
-      const datetime = el.querySelectorAll('span')[3]?.innerText.trim() || null
-      const link = el.querySelector('a')?.href || null
-
-      return { eventId, title, datetime, link }
-    })
-  })
-
-  return events
+    const events = await getEventDetails(page)
+    console.log(`${events.length} events fetched from the page.`)
+    return events
+  } catch (error) {
+    console.error(`Error fetching initial event list: ${error.message}`)
+    return []
+  }
 }
 
-// filter events by major organisations
-const filterByMajorPromotions = (events) => {
-  return events
+// Filter events to include only major promotions
+const filterMajorPromotions = (events) => {
+  const filtered = events
     .filter((event) =>
-      MAJOR_PROMOTIONS.some((org) => event.title.toUpperCase().includes(org))
+      MAJOR_PROMOTIONS.some((org) => event.title?.toUpperCase().includes(org))
     )
     .slice(0, MAX_PROMOTIONS)
+
+  console.log(`${filtered.length} events filtered by major promotions.`)
+  return filtered
 }
 
-// const WEIGHT_CLASSES = {
-//   265: 'HW',
-//   205: 'LHW',
-//   185: 'MW',
-//   170: 'WW',
-//   155: 'LW',
-//   145: 'FW',
-//   135: 'BW',
-//   125: 'FLW',
-//   115: 'SW',
-// }
+// Enrich each event with fight card details
+const populateEvents = async (events, page) => {
+  for (const event of events) {
+    if (!event.link) continue
 
-// TODO: create a function to map weight to weightclass
+    try {
+      console.log(`Fetching details for event: ${event.title}...`)
+      await page.goto(event.link)
+      event.fights = await getFightCardDetails(page)
+    } catch (error) {
+      console.warn(
+        `Failed to fetch details for event: ${event.title} (${event.link})`
+      )
+    }
+  }
+  return events
+}
 
-// extracts fight details - weight, if it's a main card fight, and fighter info
+// Get the list of events from the main page
+const getEventDetails = async (page) => {
+  return await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('.promotion')).map(
+      (element) => ({
+        eventId:
+          element
+            .querySelector('a')
+            ?.innerText.toLowerCase()
+            .replace(/\s+/g, '-') || null,
+        title: element.querySelector('a')?.innerText.trim() || null,
+        datetime: element.querySelectorAll('span')[3]?.innerText.trim() || null,
+        link: element.querySelector('a')?.href || null,
+      })
+    )
+  })
+}
+
+// Get the fight card details for a specific event
 const getFightCardDetails = async (page) => {
   return await page.evaluate(() => {
-    // helper function to get data for each fighter
-    const extractFighterData = (fightEl, position) => {
-      const fighterElement = fightEl.querySelector(
+    // get details for an individual fighter
+    const getFighterDetails = (fightEl, position) => {
+      const fighter = fightEl.querySelector(
         `div.w-\\[37\\%\\]:nth-of-type(${position})`
       )
-
-      if (!fighterElement)
+      if (!fighter)
         return {
           name: null,
           profileUrl: null,
@@ -126,44 +106,33 @@ const getFightCardDetails = async (page) => {
         }
 
       const name =
-        fighterElement.querySelector('a.link-primary-red')?.innerText.trim() ||
-        null
+        fighter.querySelector('a.link-primary-red')?.innerText.trim() || null
       const profileUrl =
-        fighterElement.querySelector('a.link-primary-red')?.href || null
+        fighter.querySelector('a.link-primary-red')?.href || null
       const record =
-        fighterElement
+        fighter
           .querySelector('span.text-\\[15px\\].md\\:text-xs')
           ?.innerText.trim() || null
       const rank =
-        fighterElement
+        fighter
           .querySelector('div.bg-tap_darkred span.text-sm.md\\:text-xs11')
           ?.innerText.trim() || null
-
-      const imageUrl = fighterElement.querySelector('img')?.src || null
+      const imageUrl = fighter.querySelector('img')?.src || null
       const countryFlagUrl =
-        fighterElement.querySelector('img.opacity-70')?.src || null
+        fighter.querySelector('img.opacity-70')?.src || null
 
       return { name, profileUrl, record, rank, imageUrl, countryFlagUrl }
     }
 
-    const fightCardSection = document.querySelector('#sectionFightCard')
-    if (!fightCardSection) return []
-
-    const fightElements = Array.from(
-      fightCardSection.querySelectorAll(
-        'li[data-controller="table-row-background"]'
-      )
-    )
-
-    return fightElements.map((fightEl) => {
-      const isMaincard = fightEl.innerText.toLowerCase().includes('main')
-      const weight =
-        fightEl.querySelector('span.bg-tap_darkgold')?.innerText.trim() || null
-      const fighterA = extractFighterData(fightEl, 1)
-      const fighterB = extractFighterData(fightEl, 3)
-
-      return { weight, maincard: isMaincard, fighterA, fighterB }
-    })
+    return Array.from(
+      document.querySelectorAll('li[data-controller="table-row-background"]')
+    ).map((fightElement) => ({
+      weight:
+        fightElement.querySelector('span.bg-tap_darkgold')?.innerText || null,
+      mainCard: fightElement.innerText.toLowerCase().includes('main'),
+      fighterA: getFighterDetails(fightElement, 1),
+      fighterB: getFighterDetails(fightElement, 3),
+    }))
   })
 }
 

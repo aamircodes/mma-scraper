@@ -12,8 +12,8 @@ app.use(express.json())
 
 connectToDatabase()
 
-app.get('/', (req, res) => {
-  res.json({ message: 'MMA Scraper API!' })
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' })
 })
 
 app.post('/api/events/scrape', async (req, res) => {
@@ -24,11 +24,9 @@ app.post('/api/events/scrape', async (req, res) => {
   }
 
   try {
-    const scrapeResult = await scrape()
-    await storeData({
-      events: scrapeResult.events,
-      updatedAt: new Date(),
-    })
+    const data = await scrape()
+
+    await storeData(data)
 
     res.status(200).json({
       message: 'Scrape completed and data stored successfully',
@@ -36,6 +34,10 @@ app.post('/api/events/scrape', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
+})
+
+app.get('/', (req, res) => {
+  res.json({ message: 'MMA Scraper API!' })
 })
 
 app.get('/api/events', async (req, res) => {
@@ -60,10 +62,6 @@ app.get('/api/events', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
-})
-
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK' })
 })
 
 const PORT = process.env.PORT || 3000

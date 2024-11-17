@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import Event from '../models/Event.js'
 
 const connectToDatabase = async () => {
   try {
@@ -12,13 +13,11 @@ const connectToDatabase = async () => {
 
 const storeData = async (data) => {
   try {
-    const db = mongoose.connection
-    const collection = db.collection('major_org_events')
-    await collection.deleteMany({})
-    await collection.insertOne(data)
-    console.log('Data stored successfully in the database')
+    await Event.deleteMany({})
+    await Event.create({ events: data, updatedAt: new Date() })
+    console.log('events stored successfully in the database')
   } catch (error) {
-    console.error(`Error storing data: ${error.message}`)
+    console.error(`Error storing events: ${error.message}`)
   }
 }
 
