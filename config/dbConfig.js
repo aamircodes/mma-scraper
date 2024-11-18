@@ -14,8 +14,10 @@ const connectToDatabase = async () => {
 const storeData = async (data) => {
   try {
     await Event.deleteMany({})
-    await Event.create({ events: data, updatedAt: new Date() })
-    console.log('events stored successfully in the database')
+    const storedData = await Event.create({
+      events: data,
+      updatedAt: new Date(),
+    })
   } catch (error) {
     console.error(`Error storing events: ${error.message}`)
   }

@@ -13,55 +13,71 @@ app.use(express.json())
 connectToDatabase()
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK' })
+  res.status(200).json({
+    status: 'OK',
+  })
 })
 
-app.post('/api/events/scrape', async (req, res) => {
+app.post('/api/scraping-jobs/', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
-    return res.status(403).json({ message: 'Forbidden: Invalid API key' })
+    return res.status(403).json({
+      error: 'Forbidden: Invalid API key',
+    })
   }
 
   try {
     const data = await scrape()
+    const storedData = await storeData(data)
 
-    await storeData(data)
-
-    res.status(200).json({
+    res.status(201).json({
       message: 'Scrape completed and data stored successfully',
     })
+    console.log(storedData)
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    res.status(500).json({
+      error: error.message,
+    })
   }
-})
-
-app.get('/', (req, res) => {
-  res.json({ message: 'MMA Scraper API!' })
 })
 
 app.get('/api/events', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
-    return res
-      .status(403)
-      .json({ error: true, message: 'Forbidden: Invalid API key' })
+    return res.status(403).json({
+      error: 'Forbidden: Invalid API key',
+    })
   }
 
   try {
     const db = mongoose.connection
-    const collection = db.collection('major_org_events')
+    const collection = db.collection('events')
     const data = await collection.findOne({})
+
+    if (!data) {
+      return res.status(404).json({
+        error: 'No events found',
+      })
+    }
+
     res.status(200).json({
-      error: false,
-      message: 'Events retrieved successfully',
+      id: data._id,
       updatedAt: data.updatedAt,
-      data: data.events,
+      events: data.events,
     })
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    res.status(500).json({
+      error: error.message,
+    })
   }
+})
+
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to the MMA Scraper API!',
+  })
 })
 
 const PORT = process.env.PORT || 3000
