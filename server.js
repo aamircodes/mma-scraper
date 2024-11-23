@@ -32,9 +32,10 @@ app.post('/api/scraping-jobs/', async (req, res) => {
     const storedData = await storeData(data)
 
     res.status(201).json({
+      id: storedData._id,
       message: 'Scrape completed and data stored successfully',
+      updatedAt: storedData.updatedAt,
     })
-    console.log(storedData)
   } catch (error) {
     res.status(500).json({
       error: error.message,

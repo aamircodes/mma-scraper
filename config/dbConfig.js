@@ -18,6 +18,7 @@ const storeData = async (data) => {
       events: data,
       updatedAt: new Date(),
     })
+    return storedData
   } catch (error) {
     console.error(`Error storing events: ${error.message}`)
   }
