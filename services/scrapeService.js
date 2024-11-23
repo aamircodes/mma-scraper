@@ -1,5 +1,9 @@
 import puppeteer from 'puppeteer'
-import { BASE_URL, MAJOR_PROMOTIONS, MAX_PROMOTIONS } from './constants.js'
+import {
+  BASE_URL,
+  MAJOR_PROMOTIONS,
+  MAX_PROMOTIONS,
+} from '../utils/constants.js'
 
 const scrape = async () => {
   const browser = await puppeteer.launch({ headless: true })
@@ -8,19 +12,17 @@ const scrape = async () => {
   try {
     // Step 1: Fetch the initial list of events
     const allEvents = await fetchInitialEventList(page)
-
     // Step 2: Filter the list to only include relevant events
     const filteredEvents = filterMajorPromotions(allEvents)
-
     // Step 3: Enrich only the filtered events with fight card details
-    const enrichedEvents = await populateEvents(filteredEvents, page)
+    const enrichedEvents = await populateEventDetails(filteredEvents, page)
 
     return enrichedEvents
   } catch (error) {
-    console.error(`Error occurred during scraping: ${error.message}`)
-    return []
+    throw new Error(`Error occurred during scraping: ${error.message}`)
   } finally {
     await page.close()
+    await browser.close()
   }
 }
 
@@ -30,12 +32,11 @@ const fetchInitialEventList = async (page) => {
     console.log(`Navigating to ${BASE_URL}...`)
     await page.goto(`${BASE_URL}/fightcenter?group=major&schedule=upcoming`)
 
-    const events = await getEventDetails(page)
+    const events = await extractEventDetails(page)
     console.log(`${events.length} events fetched from the page.`)
     return events
   } catch (error) {
-    console.error(`Error fetching initial event list: ${error.message}`)
-    return []
+    throw new Error(`Error fetching initial event list: ${error.message}`)
   }
 }
 
@@ -52,14 +53,14 @@ const filterMajorPromotions = (events) => {
 }
 
 // Enrich each event with fight card details
-const populateEvents = async (events, page) => {
+const populateEventDetails = async (events, page) => {
   for (const event of events) {
     if (!event.link) continue
 
     try {
       console.log(`Fetching details for event: ${event.title}...`)
       await page.goto(event.link)
-      event.fights = await getFightCardDetails(page)
+      event.fights = await extractFightCardDetails(page)
     } catch (error) {
       console.warn(
         `Failed to fetch details for event: ${event.title} (${event.link})`
@@ -70,7 +71,7 @@ const populateEvents = async (events, page) => {
 }
 
 // Get the list of events from the main page
-const getEventDetails = async (page) => {
+const extractEventDetails = async (page) => {
   return await page.evaluate(() => {
     return Array.from(document.querySelectorAll('.promotion')).map(
       (element) => ({
@@ -88,7 +89,7 @@ const getEventDetails = async (page) => {
 }
 
 // Get the fight card details for a specific event
-const getFightCardDetails = async (page) => {
+const extractFightCardDetails = async (page) => {
   return await page.evaluate(() => {
     // get details for an individual fighter
     const getFighterDetails = (fightEl, position) => {

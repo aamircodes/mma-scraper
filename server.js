@@ -1,8 +1,8 @@
 import express from 'express'
 import dotenv from 'dotenv'
-import { connectToDatabase, storeData } from './config/dbConfig.js'
-import scrape from './utils/scrape.js'
-import mongoose from 'mongoose'
+import { connectToDatabase } from './config/database.js'
+import scrape from './services/scrapeService.js'
+import { storeData, fetchData } from './services/eventService.js'
 
 dotenv.config()
 
@@ -12,24 +12,22 @@ app.use(express.json())
 
 connectToDatabase()
 
-app.get('/health', (req, res) => {
+app.get('/health', (req, res) =>
   res.status(200).json({
     status: 'OK',
   })
-})
+)
 
-app.post('/api/scraping-jobs/', async (req, res) => {
+app.post('/api/scrapes/', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
-    return res.status(403).json({
-      error: 'Forbidden: Invalid API key',
-    })
+    return next({ status: 403, message: 'Forbidden: Invalid API key' })
   }
 
   try {
-    const data = await scrape()
-    const storedData = await storeData(data)
+    const scrapedData = await scrape()
+    const storedData = await storeData(scrapedData)
 
     res.status(201).json({
       id: storedData._id,
@@ -37,9 +35,7 @@ app.post('/api/scraping-jobs/', async (req, res) => {
       updatedAt: storedData.updatedAt,
     })
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    })
+    next(error)
   }
 })
 
@@ -47,37 +43,27 @@ app.get('/api/events', async (req, res) => {
   const apiKey = req.headers['x-api-key']
 
   if (apiKey !== process.env.SECRET_KEY) {
-    return res.status(403).json({
-      error: 'Forbidden: Invalid API key',
-    })
+    next({ status: 403, message: 'Forbidden: Invalid API key' })
   }
 
   try {
-    const db = mongoose.connection
-    const collection = db.collection('events')
-    const data = await collection.findOne({})
-
-    if (!data) {
-      return res.status(404).json({
-        error: 'No events found',
-      })
-    }
+    const eventData = await fetchData()
 
     res.status(200).json({
-      id: data._id,
-      updatedAt: data.updatedAt,
-      events: data.events,
+      id: eventData._id,
+      updatedAt: eventData.updatedAt,
+      events: eventData.events,
     })
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    })
+    next(error)
   }
 })
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to the MMA Scraper API!',
+app.use((err, req, res, next) => {
+  console.error(err.stack)
+
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
   })
 })
 
