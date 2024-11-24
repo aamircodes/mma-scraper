@@ -12,19 +12,21 @@ app.use(express.json())
 
 connectToDatabase()
 
+const validateApiKey = (req, res, next) => {
+  const apiKey = req.headers['x-api-key']
+  if (apiKey !== process.env.SECRET_KEY) {
+    return res.status(403).json({ message: 'Forbidden: Invalid API key' })
+  }
+  next()
+}
+
 app.get('/health', (req, res) =>
   res.status(200).json({
     status: 'OK',
   })
 )
 
-app.post('/api/scrapes/', async (req, res) => {
-  const apiKey = req.headers['x-api-key']
-
-  if (apiKey !== process.env.SECRET_KEY) {
-    return next({ status: 403, message: 'Forbidden: Invalid API key' })
-  }
-
+app.post('/api/scrapes/', validateApiKey, async (req, res, next) => {
   try {
     const scrapedData = await scrape()
     const storedData = await storeData(scrapedData)
@@ -39,13 +41,7 @@ app.post('/api/scrapes/', async (req, res) => {
   }
 })
 
-app.get('/api/events', async (req, res) => {
-  const apiKey = req.headers['x-api-key']
-
-  if (apiKey !== process.env.SECRET_KEY) {
-    next({ status: 403, message: 'Forbidden: Invalid API key' })
-  }
-
+app.get('/api/events', validateApiKey, async (req, res, next) => {
   try {
     const eventData = await fetchData()
 
@@ -55,7 +51,7 @@ app.get('/api/events', async (req, res) => {
       events: eventData.events,
     })
   } catch (error) {
-    next(error)
+    return next(error)
   }
 })
 
