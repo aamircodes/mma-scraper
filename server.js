@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 import { connectToDatabase } from './config/database.js'
 import scrape from './services/scrapeService.js'
 import { storeData, fetchData } from './services/eventService.js'
+import validateApiKey from './middleware/validateApiKey.js'
 
 dotenv.config()
 
@@ -11,14 +12,6 @@ const app = express()
 app.use(express.json())
 
 connectToDatabase()
-
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key']
-  if (apiKey !== process.env.SECRET_KEY) {
-    return res.status(403).json({ message: 'Forbidden: Invalid API key' })
-  }
-  next()
-}
 
 app.get('/health', (req, res) =>
   res.status(200).json({
@@ -51,7 +44,7 @@ app.get('/api/events', validateApiKey, async (req, res, next) => {
       events: eventData.events,
     })
   } catch (error) {
-    return next(error)
+    next(error)
   }
 })
 
